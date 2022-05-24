@@ -17,3 +17,8 @@ class Solution:
                 elif(hashmap[target-nums[i]][0]!=i):
                     
                    return [i,hashmap[target-nums[i]][0]] 
+
+
+
+####################### IDEAL SOLUTION ###############################
+
