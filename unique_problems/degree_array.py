@@ -18,6 +18,7 @@ class Solution:
                     hashmap[nums[i]][2] = i
         # iterate over the hashmap to calc the max freq, incase of a tie report smallest subarray
         for it in hashmap:
+            
             if hashmap[it][0] > max_freq:
                 max_freq = hashmap[it][0]
                 max_num = it
