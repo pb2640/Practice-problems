@@ -5,7 +5,7 @@
 #         self.hashmap = {}
 #         self.rotations = 0
 #         self.position = 0
-        
+
 
 #     def insert(self, val: int) -> bool:
 #         if(val in self.hashmap):
@@ -22,7 +22,7 @@
 #             self.hashmap[val] = self.position
 #             self.position+=1
 #             return True
-        
+
 
 #     def remove(self, val: int) -> bool:
 #         if(val in self.hashmap):
@@ -34,22 +34,23 @@
 #             return True
 #         else:
 #             return False
-            
-            
+
 
 #     def getRandom(self) -> int:
 #         ele = self.arr.popleft()
 #         self.arr.append(ele)
 #         self.rotations+=1
 #         return ele
-        
-        
-        ###################
-        # BETTER WAY
-        ###################
+
+
+###################
+# BETTER WAY
+###################
 
 from random import choice
-class RandomizedSet():
+
+
+class RandomizedSet:
     def __init__(self):
         """
         Initialize your data structure here.
@@ -57,7 +58,6 @@ class RandomizedSet():
         self.dict = {}
         self.list = []
 
-        
     def insert(self, val: int) -> bool:
         """
         Inserts a value to the set. Returns true if the set did not already contain the specified element.
@@ -67,7 +67,6 @@ class RandomizedSet():
         self.dict[val] = len(self.list)
         self.list.append(val)
         return True
-        
 
     def remove(self, val: int) -> bool:
         """
