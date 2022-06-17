@@ -3,16 +3,15 @@ class Solution:
         hashmap = {}
         for char in magazine:
             if char in hashmap:
-                hashmap[char]+=1
+                hashmap[char] += 1
             else:
-                hashmap[char]=1
+                hashmap[char] = 1
         for char in ransomNote:
             if char in hashmap:
-                hashmap[char]-=1
+                hashmap[char] -= 1
             else:
                 return False
         for char in ransomNote:
-            if(hashmap[char] <0):
+            if hashmap[char] < 0:
                 return False
         return True
-        
