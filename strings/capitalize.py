@@ -1,3 +1,4 @@
+## 520  Detect capital
 class Solution:
     def detectCapitalUse(self, word: str) -> bool:
         ref = set(list("QWERTYUIOPASDFGHJKLZXCVBNM"))
