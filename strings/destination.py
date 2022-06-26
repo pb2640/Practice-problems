@@ -1,11 +1,13 @@
 class Solution:
     def destCity(self, paths: List[List[str]]) -> str:
-        res= set()
+        res = set()
         for item in paths:
             res.add(item[0])
         for item in paths:
             if item[1] not in res:
-                return(item[1])
+                return item[1]
+
+
 # class Solution:
 #     def destCity(self, paths: List[List[str]]) -> str:
 #         check = set()
@@ -20,5 +22,3 @@ class Solution:
 #             if(second not in ref):
 #                 check.add(second)
 #         return list(check)[0]
-                
-        

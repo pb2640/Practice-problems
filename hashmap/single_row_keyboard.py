@@ -6,7 +6,6 @@ class Solution:
         index = 0
         ans = 0
         for letter in word:
-            ans+=abs(hashmap[letter]-index)
+            ans += abs(hashmap[letter] - index)
             index = hashmap[letter]
         return ans
-        
