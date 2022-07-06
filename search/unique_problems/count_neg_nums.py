@@ -17,6 +17,7 @@ class Solution:
                 if mid == 0 and row[mid] < 0:
                     count += length
                     break
+                # edge case(non negative not positive)
                 elif row[mid] < 0 and row[mid - 1] >= 0:
                     count += length - mid
                     break
