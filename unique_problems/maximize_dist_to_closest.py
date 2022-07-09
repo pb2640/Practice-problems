@@ -12,17 +12,17 @@ class Solution:
         """
         total = len(seats)
         left, right = [0 for i in range(total)], [0 for i in range(total)]
-        closest = -float("inf")
+        closest = float("inf")
 
         for i in range(total):
             if seats[i] == 1:
                 closest = i
-            left[i] = i - closest
+            left[i] = abs(i - closest)
         closest = float("inf")
         for i in range(total - 1, -1, -1):
             if seats[i] == 1:
                 closest = i
-            right[i] = closest - i
+            right[i] = abs(closest - i)
         # print(left,right)
         ans = 0
         for i in range(total):
