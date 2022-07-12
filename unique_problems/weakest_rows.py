@@ -1,35 +1,21 @@
 class Solution:
-    def kWeakestRows(self, mat: List[List[int]], k: int) -> List[int]:
-        '''
+    def kWeakestRows(self, mat, k):
+        """
         make a refrence array, classify a row as weak/not-weak,
         append [index,count_soldiers] if the row is weak
-        sort the array by count_soldier as the key 
+        sort the array by count_soldier as the key
         return first k indexes
-        
-        IMPROVEMENT: use heap
-        '''
 
-
-        class Solution:
-    def kWeakestRows(self, mat: List[List[int]], k: int) -> List[int]:
-        '''
-        make a refrence array, classify a row as weak/not-weak,
-        append [index,count_soldiers] if the row is weak
-        sort the array by count_soldier as the key 
-        return first k indexes
-        
         IMPROVEMENT: use heap
-        '''
+        """
         ref = []
         for i in range(len(mat)):
-            ref.append([i,sum(mat[i])])
-        ref.sort(key = lambda x:x[1])
+            ref.append([i, sum(mat[i])])
+        ref.sort(key=lambda x: x[1])
         ans = []
         for i in range(k):
             ans.append(ref[i][0])
         return ans
-
-
 
         # i = 0
         # j = 1
@@ -53,4 +39,3 @@ class Solution:
         # for i in range(min(k,len(ref))):
         #     mat.append(ref[i][0])
         # return mat
-      
