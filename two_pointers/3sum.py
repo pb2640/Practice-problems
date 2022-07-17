@@ -1,19 +1,25 @@
 class Solution:
     def threeSum(self, nums: List[int]) -> List[List[int]]:
+        '''
+        x+y = z
+        find (-x-y) in the loop,make sure its unique to outer loop
+        '''
         dups = set()
         res = set()
         seen = {}
-        for i, val1 in enumerate(nums):
+        for i,val1 in enumerate(nums):
             if val1 not in dups:
                 dups.add(val1)
-                for j, val2 in enumerate(nums[i + 1 :]):
-                    complement = -val1 - val2
-                    if complement in seen and seen[complement] == i:
-                        res.add(tuple(sorted([val1, val2, complement])))
+                
+                for j,val2 in enumerate(nums[i+1:]):
+                    complement = -val1-val2
+                    if(complement in seen and seen[complement]==i):
+                        '''
+                        sorting because we want non duplicate pairs
+                        '''
+                        res.add(tuple(sorted([val1,val2,complement])))
                     seen[val2] = i
         return res
-
-
 # class Solution:
 #     def threeSum(self, nums: List[int]) -> List[List[int]]:
 #         ans = []
