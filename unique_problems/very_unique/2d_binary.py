@@ -30,11 +30,6 @@ class Solution:
         while lx <= rx:
             mid = (lx + rx) // 2
             i, j = decode(mid, n)
-            # print(lx,rx,mid,(i,j))
-            # if(i>=len(matrix) or j>=n):
-            #     # print(i,j)
-            #     print("executed")
-            #     return False
             mid_ele = matrix[i][j]
             if mid_ele == target:
                 return True
