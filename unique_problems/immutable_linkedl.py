@@ -13,14 +13,14 @@
 #          :rtype ImmutableListNode
 #          """
 
+
 class Solution(object):
     def printLinkedListInReverse(self, head):
-        if(ImmutableListNode.getNext(head)):
+        if ImmutableListNode.getNext(head):
             self.printLinkedListInReverse(ImmutableListNode.getNext(head))
-            
+
         ImmutableListNode.printValue(head)
         """
         :type head: ImmutableListNode
         :rtype: None
         """
-		
