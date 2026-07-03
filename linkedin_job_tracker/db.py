@@ -36,12 +36,32 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# Columns added after the first release; existing DBs are migrated in place.
+ENRICHMENT_COLUMNS = [
+    ("description", "TEXT"),
+    ("skills", "TEXT"),        # padded comma list, e.g. ",Python,Spark,"
+    ("salary_text", "TEXT"),
+    ("salary_min", "INTEGER"),
+    ("salary_max", "INTEGER"),
+    ("seniority", "TEXT"),
+    ("match_score", "INTEGER"),
+]
+
+
+def migrate(conn):
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+    for name, decl in ENRICHMENT_COLUMNS:
+        if name not in existing:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {decl}")
+
+
 @contextmanager
 def connect():
     config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    migrate(conn)
     try:
         yield conn
         conn.commit()

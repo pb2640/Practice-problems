@@ -25,10 +25,18 @@ def job_filters():
         params.append(since(days))
     q = request.args.get("q", "").strip()
     if q:
-        clauses.append("(title LIKE ? OR company LIKE ? OR location LIKE ?)")
-        params.extend([f"%{q}%"] * 3)
+        clauses.append("(title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)")
+        params.extend([f"%{q}%"] * 4)
+    skill = request.args.get("skill", "").strip()
+    if skill:
+        clauses.append("skills LIKE ?")
+        params.append(f"%,{skill},%")
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, params
+
+
+def skills_list(padded: str | None) -> list[str]:
+    return [s for s in (padded or "").strip(",").split(",") if s]
 
 
 @app.route("/")
@@ -40,14 +48,32 @@ def dashboard():
 def api_jobs():
     where, params = job_filters()
     limit = min(request.args.get("limit", 200, type=int), 1000)
+    order = ("match_score IS NULL, match_score DESC, first_seen DESC"
+             if request.args.get("sort") == "match" else "first_seen DESC")
     with db.connect() as conn:
         rows = conn.execute(
-            f"""SELECT job_id, title, company, location, posted_date, url, first_seen
+            f"""SELECT job_id, title, company, location, posted_date, url, first_seen,
+                       skills, salary_text, seniority, match_score
                 FROM jobs {where}
-                ORDER BY first_seen DESC LIMIT ?""",
+                ORDER BY {order} LIMIT ?""",
             (*params, limit),
         ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    jobs = []
+    for r in rows:
+        job = dict(r)
+        job["skills"] = skills_list(job.pop("skills"))
+        jobs.append(job)
+    return jsonify(jobs)
+
+
+@app.route("/api/top-skills")
+def api_top_skills():
+    from collections import Counter
+    where, params = job_filters()
+    with db.connect() as conn:
+        rows = conn.execute(f"SELECT skills FROM jobs {where}", params).fetchall()
+    counts = Counter(s for r in rows for s in skills_list(r["skills"]))
+    return jsonify([{"skill": s, "n": n} for s, n in counts.most_common(10)])
 
 
 @app.route("/api/stats")

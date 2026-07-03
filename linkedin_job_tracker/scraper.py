@@ -24,6 +24,7 @@ import config
 import db
 
 GUEST_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+JOB_DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{}"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -110,6 +111,114 @@ def parse_cards(html: str) -> list[dict]:
     return jobs
 
 
+# --- Enrichment: description, skills, salary, seniority, match score --------
+
+SKILL_RES = {name: re.compile(rx, re.I) for name, rx in config.SKILL_PATTERNS.items()}
+SALARY_RE = re.compile(
+    r"\$\s?(\d{2,3}(?:,\d{3})?(?:\.\d+)?)\s*([kK])?\s*(?:-|–|—|to)\s*"
+    r"\$?\s?(\d{2,3}(?:,\d{3})?(?:\.\d+)?)\s*([kK])?"
+)
+SENIORITY_RULES = [
+    (re.compile(r"\b(intern|junior|entry[- ]level)\b", re.I), "Entry"),
+    (re.compile(r"\b(staff|principal|lead)\b", re.I), "Staff+"),
+    (re.compile(r"\b(manager|director|head of)\b", re.I), "Manager"),
+    (re.compile(r"\b(senior|sr\.?)\b", re.I), "Senior"),
+]
+
+
+def extract_skills(text: str) -> list[str]:
+    return [name for name, rx in SKILL_RES.items() if rx.search(text)]
+
+
+def match_score(job_skills: list[str]) -> int | None:
+    """Share of the job's detected skills that are in MY_SKILLS, as 0-100."""
+    if not job_skills:
+        return None
+    mine = {s.lower() for s in config.MY_SKILLS}
+    hit = sum(1 for s in job_skills if s.lower() in mine)
+    return round(100 * hit / len(job_skills))
+
+
+def extract_salary(text: str) -> tuple[str | None, int | None, int | None]:
+    m = SALARY_RE.search(text)
+    if not m:
+        return None, None, None
+
+    def to_number(value: str, k: str | None) -> float:
+        n = float(value.replace(",", ""))
+        return n * 1000 if k else n
+
+    lo, hi = to_number(m.group(1), m.group(2)), to_number(m.group(3), m.group(4))
+    if lo >= 10_000 and hi >= lo:  # annual figures; hourly rates keep text only
+        return m.group(0), int(lo), int(hi)
+    return m.group(0), None, None
+
+
+def detect_seniority(title: str) -> str:
+    for rx, label in SENIORITY_RULES:
+        if rx.search(title):
+            return label
+    return "Mid"
+
+
+def fetch_detail(session: requests.Session, job_id: str) -> str | None:
+    url = JOB_DETAIL_URL.format(job_id)
+    for attempt in range(3):
+        resp = session.get(url, headers=HEADERS, timeout=30)
+        if resp.status_code == 200:
+            return resp.text
+        if resp.status_code == 429:
+            time.sleep(15 * (attempt + 1))
+            continue
+        return None
+    return None
+
+
+def parse_description(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    node = soup.select_one("div.show-more-less-html__markup")
+    return node.get_text("\n", strip=True) if node else ""
+
+
+def enrich_jobs(session: requests.Session, conn, limit: int | None = None) -> int:
+    """Fetch descriptions for jobs that don't have one yet and derive
+    skills, salary, seniority, and the profile match score."""
+    limit = limit or config.ENRICH_MAX_PER_RUN
+    rows = conn.execute(
+        """SELECT job_id, title FROM jobs
+           WHERE description IS NULL AND job_id GLOB '[0-9]*'
+           ORDER BY first_seen DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    if not rows:
+        return 0
+    print(f"Fetching descriptions for {len(rows)} jobs...")
+    done = 0
+    for row in rows:
+        html = fetch_detail(session, row["job_id"])
+        if html is None:
+            continue
+        desc = parse_description(html)
+        skills = extract_skills(f"{row['title']}\n{desc}")
+        sal_text, sal_min, sal_max = extract_salary(desc)
+        conn.execute(
+            """UPDATE jobs SET description = ?, skills = ?, salary_text = ?,
+               salary_min = ?, salary_max = ?, seniority = ?, match_score = ?
+               WHERE job_id = ?""",
+            (desc, "," + ",".join(skills) + "," if skills else "",
+             sal_text, sal_min, sal_max,
+             detect_seniority(row["title"]), match_score(skills), row["job_id"]),
+        )
+        done += 1
+        if done % 10 == 0:
+            conn.commit()
+            print(f"  {done}/{len(rows)}")
+        time.sleep(random.uniform(*config.REQUEST_DELAY_SECONDS))
+    conn.commit()
+    print(f"  enriched {done} jobs")
+    return done
+
+
 def scrape_search(session: requests.Session, conn, search: dict,
                   time_range: str) -> tuple[int, int]:
     found = new = skipped = 0
@@ -153,6 +262,8 @@ def run(time_range: str | None = None) -> int:
                     total_found += found
                     total_new += new
                     conn.commit()
+                if config.FETCH_DESCRIPTIONS:
+                    enrich_jobs(session, conn)
         except Exception as exc:  # record the failure, then re-raise
             status = f"error: {exc}"
             raise
@@ -193,8 +304,20 @@ def load_demo_data():
                 "search_location": "United States",
             }
             if db.upsert_job(conn, job):
-                conn.execute("UPDATE jobs SET first_seen = ?, last_seen = ? WHERE job_id = ?",
-                             (stamp, stamp, job["job_id"]))
+                skills = rng.sample(sorted(config.SKILL_PATTERNS), k=rng.randint(3, 7))
+                has_salary = rng.random() < 0.4
+                lo = rng.randrange(120, 165, 5) * 1000 if has_salary else None
+                hi = lo + rng.randrange(20, 50, 5) * 1000 if has_salary else None
+                conn.execute(
+                    """UPDATE jobs SET first_seen = ?, last_seen = ?, description = ?,
+                       skills = ?, salary_text = ?, salary_min = ?, salary_max = ?,
+                       seniority = ?, match_score = ? WHERE job_id = ?""",
+                    (stamp, stamp,
+                     "Sample posting looking for experience with " + ", ".join(skills) + ".",
+                     "," + ",".join(skills) + ",",
+                     f"${lo:,} - ${hi:,}" if has_salary else None, lo, hi,
+                     detect_seniority(job["title"]), match_score(skills), job["job_id"]),
+                )
                 n += 1
         db.finish_run(conn, run_id, 140, n, "demo")
     print(f"Loaded {n} demo jobs into {config.DB_PATH}")
@@ -206,9 +329,15 @@ def main():
                         help="look back 7 days instead of the configured window")
     parser.add_argument("--demo", action="store_true",
                         help="insert sample data instead of scraping")
+    parser.add_argument("--enrich", action="store_true",
+                        help="only fetch descriptions for jobs already in the DB")
     args = parser.parse_args()
     if args.demo:
         load_demo_data()
+        return 0
+    if args.enrich:
+        with db.connect() as conn, requests.Session() as session:
+            enrich_jobs(session, conn)
         return 0
     return run("r604800" if args.backfill else None)
 

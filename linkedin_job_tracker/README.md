@@ -66,12 +66,30 @@ LinkedIn's remote filter (`f_WT=2`) rather than "Remote" as a location, and
 `US_ONLY = True` drops any returned posting whose location string doesn't look
 like the US. Searching another country? Set its `geo_id` and `US_ONLY = False`.
 
+## Profile matching
+
+After the search pass, the scraper fetches each new job's full description
+(same public guest endpoint) and derives:
+
+- **Skills** — matched against `SKILL_PATTERNS` in `config.py` (Spark,
+  Airflow, dbt, Kafka, …)
+- **Match score** — the share of a job's detected skills that appear in
+  `MY_SKILLS`. **Edit `MY_SKILLS` in `config.py` to mirror your resume** —
+  that's what powers the "Best match" sort.
+- **Salary** — extracted from the description when the posting includes a range
+- **Seniority** — Entry / Mid / Senior / Staff+ / Manager, from the title
+
+Backfill descriptions for jobs already in the DB with `python scraper.py
+--enrich` (it processes up to `ENRICH_MAX_PER_RUN` per call; rerun until done).
+
 ## Dashboard
 
 - Stat tiles: jobs in view, new in 24h / this week, distinct companies
-- New jobs per day (last 14 days) and top-companies charts
-- Search box + time-window filter over the full table of postings, each
-  linking to the LinkedIn listing
+- Charts: new jobs per day, top companies, most in-demand skills
+- Filters: text search (includes descriptions), time window, skill,
+  newest-first or best-match ordering
+- Table shows skills, salary, and match % per posting, each linking to the
+  LinkedIn listing
 
 ## Notes & limits
 

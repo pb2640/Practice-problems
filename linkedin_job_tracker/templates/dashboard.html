@@ -48,6 +48,13 @@
   }
   .filters input { flex: 1; min-width: 220px; }
 
+  .chip {
+    display: inline-block; background: var(--grid); color: var(--ink-2);
+    border-radius: 999px; padding: 1px 8px; font-size: 11px; margin: 1px 2px 1px 0;
+    white-space: nowrap;
+  }
+  td .match-good { font-weight: 650; }
+
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
   .tile {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -57,7 +64,8 @@
   .tile .value { font-size: 30px; font-weight: 600; margin-top: 2px; }
   .tile .delta { font-size: 13px; color: var(--good); margin-top: 2px; }
 
-  .charts { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-top: 12px; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .card.wide { grid-column: 1 / -1; }
   @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -103,6 +111,11 @@
       <option value="14">Last 14 days</option>
       <option value="30">Last 30 days</option>
     </select>
+    <select id="skill"><option value="">All skills</option></select>
+    <select id="sort">
+      <option value="">Newest first</option>
+      <option value="match">Best match</option>
+    </select>
   </div>
 
   <div class="tiles">
@@ -113,15 +126,17 @@
   </div>
 
   <div class="charts">
-    <div class="card"><h2>New jobs per day — last 14 days</h2><div id="chart-days"></div></div>
+    <div class="card wide"><h2>New jobs per day — last 14 days</h2><div id="chart-days"></div></div>
     <div class="card"><h2>Top companies</h2><div id="chart-companies"></div></div>
+    <div class="card"><h2>Skills in demand</h2><div id="chart-skills"></div></div>
   </div>
 
   <div class="card table-card">
     <h2>Latest postings</h2>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Title</th><th>Company</th><th>Location</th><th>First seen</th></tr></thead>
+        <thead><tr><th>Title</th><th>Company</th><th>Location</th><th>Skills</th>
+                   <th>Salary</th><th>Match</th><th>First seen</th></tr></thead>
         <tbody id="jobs-body"></tbody>
       </table>
     </div>
@@ -142,12 +157,12 @@ function showTip(evt, html) {
 }
 function hideTip() { tooltip.style.display = "none"; }
 
-function filterQuery() {
-  const p = new URLSearchParams();
+function filterQuery(extra) {
+  const p = new URLSearchParams(extra || {});
   const q = $("q").value.trim();
-  const days = $("days").value;
   if (q) p.set("q", q);
-  if (days) p.set("days", days);
+  if ($("days").value) p.set("days", $("days").value);
+  if ($("skill").value) p.set("skill", $("skill").value);
   return p.toString() ? "?" + p.toString() : "";
 }
 
@@ -171,7 +186,7 @@ function niceTicks(v) {
 }
 
 function renderDayChart(data) {
-  const W = 600, H = 220, pad = { l: 34, r: 8, t: 10, b: 24 };
+  const W = 1000, H = 220, pad = { l: 34, r: 8, t: 10, b: 24 };
   const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
   const { step, max } = niceTicks(Math.max(...data.map(d => d.n)));
   const slot = iw / data.length;
@@ -199,40 +214,49 @@ function renderDayChart(data) {
   $("chart-days").innerHTML = s;
 }
 
-function renderCompanyChart(data) {
+function renderBarList(el, data, ariaLabel) {
   const rowH = 30, labelW = 110, W = 380, pad = { r: 34 };
   const H = Math.max(1, data.length) * rowH + 6;
   const iw = W - labelW - pad.r;
   const max = Math.max(1, ...data.map(d => d.n));
   const color = css("--series-1");
-  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Top companies by job count">`;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${ariaLabel}">`;
   if (!data.length) s += `<text x="8" y="20">No data yet</text>`;
   data.forEach((d, i) => {
     const y = i * rowH + 4;
     const bh = Math.min(20, rowH - 8);
     const w = Math.max(2, (d.n / max) * iw);
-    const name = d.company.length > 16 ? d.company.slice(0, 15) + "…" : d.company;
-    s += `<text class="name" x="${labelW - 8}" y="${y + bh / 2 + 4}" text-anchor="end">${name}</text>`;
-    s += `<path d="${roundedBar(labelW, y, w, bh, 4)}" fill="${color}" data-tip="${d.company}: <b>${d.n}</b> jobs"/>`;
+    const name = d.label.length > 16 ? d.label.slice(0, 15) + "…" : d.label;
+    s += `<text class="name" x="${labelW - 8}" y="${y + bh / 2 + 4}" text-anchor="end">${esc(name)}</text>`;
+    s += `<path d="${roundedBar(labelW, y, w, bh, 4)}" fill="${color}" data-tip="${esc(d.label)}: <b>${d.n}</b> jobs"/>`;
     s += `<text class="val" x="${labelW + w + 6}" y="${y + bh / 2 + 4}">${d.n}</text>`;
   });
   s += "</svg>";
-  $("chart-companies").innerHTML = s;
+  el.innerHTML = s;
 }
 
 function renderTable(jobs) {
   const body = $("jobs-body");
   if (!jobs.length) {
-    body.innerHTML = `<tr><td colspan="4" class="empty">No jobs match — run <code>python scraper.py</code> to fetch some.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty">No jobs match — run <code>python scraper.py</code> to fetch some.</td></tr>`;
     return;
   }
-  body.innerHTML = jobs.map(j => `
+  body.innerHTML = jobs.map(j => {
+    const skills = (j.skills || []).slice(0, 4).map(s => `<span class="chip">${esc(s)}</span>`).join("");
+    const more = (j.skills || []).length > 4 ? `<span class="chip">+${j.skills.length - 4}</span>` : "";
+    const match = j.match_score == null ? "—"
+      : `<span class="${j.match_score >= 70 ? "match-good" : ""}">${j.match_score}%</span>`;
+    return `
     <tr>
       <td><a href="${j.url}" target="_blank" rel="noopener">${esc(j.title)}</a></td>
       <td>${esc(j.company || "—")}</td>
       <td>${esc(j.location || "—")}</td>
+      <td>${skills + more || "—"}</td>
+      <td class="num">${esc(j.salary_text || "—")}</td>
+      <td class="num">${match}</td>
       <td class="num">${(j.first_seen || "").slice(0, 10)}</td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 }
 
 function esc(s) {
@@ -241,11 +265,13 @@ function esc(s) {
 
 async function refresh() {
   const fq = filterQuery();
-  const [stats, jobs, days, companies] = await Promise.all([
+  const sort = $("sort").value;
+  const [stats, jobs, days, companies, skills] = await Promise.all([
     fetch("/api/stats" + fq).then(r => r.json()),
-    fetch("/api/jobs" + fq).then(r => r.json()),
+    fetch("/api/jobs" + filterQuery(sort ? { sort } : {})).then(r => r.json()),
     fetch("/api/timeseries?days=14").then(r => r.json()),
     fetch("/api/top-companies" + fq).then(r => r.json()),
+    fetch("/api/top-skills" + fq).then(r => r.json()),
   ]);
   $("t-total").textContent = stats.total;
   $("t-24h").textContent = stats.new_24h;
@@ -255,9 +281,16 @@ async function refresh() {
     ? `Last scrape: ${stats.last_run.started_at.slice(0, 16).replace("T", " ")} UTC · ${stats.last_run.jobs_new} new (${stats.last_run.status})`
     : "No scrapes yet";
   renderDayChart(days);
-  renderCompanyChart(companies);
+  renderBarList($("chart-companies"), companies.map(d => ({ label: d.company, n: d.n })), "Top companies by job count");
+  renderBarList($("chart-skills"), skills.map(d => ({ label: d.skill, n: d.n })), "Most requested skills");
   renderTable(jobs);
 }
+
+// Populate the skill dropdown once, from all-time top skills.
+fetch("/api/top-skills").then(r => r.json()).then(skills => {
+  $("skill").innerHTML = '<option value="">All skills</option>' +
+    skills.map(s => `<option value="${esc(s.skill)}">${esc(s.skill)}</option>`).join("");
+});
 
 document.body.addEventListener("mousemove", (e) => {
   const t = e.target.closest("[data-tip]");
@@ -266,6 +299,8 @@ document.body.addEventListener("mousemove", (e) => {
 let debounce;
 $("q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(refresh, 250); });
 $("days").addEventListener("change", refresh);
+$("skill").addEventListener("change", refresh);
+$("sort").addEventListener("change", refresh);
 refresh();
 </script>
 </body>
