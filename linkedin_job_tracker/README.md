@@ -82,6 +82,20 @@ After the search pass, the scraper fetches each new job's full description
 Backfill descriptions for jobs already in the DB with `python scraper.py
 --enrich` (it processes up to `ENRICH_MAX_PER_RUN` per call; rerun until done).
 
+## Notifications
+
+After every scrape, new jobs scoring at least `NOTIFY_MIN_MATCH` (default 60%)
+trigger:
+
+- a **Windows desktop toast** (on by default, nothing to configure), and/or
+- an **email** — set `NOTIFY_EMAIL` in `config.py`, then put an SMTP app
+  password in the `JOB_TRACKER_SMTP_PASSWORD` environment variable (for Gmail:
+  myaccount.google.com/apppasswords). The password never goes in a file.
+
+Running 2-3 scheduled scrapes a day (e.g. 8:00 / 13:00 / 18:00) keeps you in
+the first wave of applicants; dedupe makes the overlap harmless and the volume
+stays polite.
+
 ## Dashboard
 
 - Stat tiles: jobs in view, new in 24h / this week, distinct companies

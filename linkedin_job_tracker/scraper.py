@@ -22,6 +22,7 @@ from bs4 import BeautifulSoup
 
 import config
 import db
+import notify
 
 GUEST_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 JOB_DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{}"
@@ -251,6 +252,7 @@ def scrape_search(session: requests.Session, conn, search: dict,
 def run(time_range: str | None = None) -> int:
     time_range = time_range or config.TIME_RANGE
     total_found = total_new = 0
+    run_started = db.utcnow()
     with db.connect() as conn:
         run_id = db.start_run(conn)
         conn.commit()
@@ -264,6 +266,12 @@ def run(time_range: str | None = None) -> int:
                     conn.commit()
                 if config.FETCH_DESCRIPTIONS:
                     enrich_jobs(session, conn)
+                matches = conn.execute(
+                    """SELECT title, company, location, match_score, salary_text, url
+                       FROM jobs WHERE first_seen >= ? AND match_score >= ?""",
+                    (run_started, config.NOTIFY_MIN_MATCH),
+                ).fetchall()
+                notify.notify_new_matches([dict(m) for m in matches])
         except Exception as exc:  # record the failure, then re-raise
             status = f"error: {exc}"
             raise

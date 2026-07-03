@@ -78,6 +78,19 @@ DB_PATH = Path(__file__).resolve().parent / "data" / "jobs.db"
 # --- Scheduler ---------------------------------------------------------------
 DAILY_RUN_AT = "08:00"  # local time, HH:MM, used by scheduler.py
 
+# --- Notifications -----------------------------------------------------------
+# After each scrape, alert on new jobs whose match score clears this bar.
+NOTIFY_MIN_MATCH = 60
+NOTIFY_WINDOWS_TOAST = True   # desktop toast on Windows; no setup needed
+# Email (optional): set to your address to enable, e.g. "me@gmail.com".
+# For Gmail create an App Password (myaccount.google.com/apppasswords) and put
+# it in the environment variable named by SMTP_PASSWORD_ENV -- never in this file.
+NOTIFY_EMAIL = None
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USER = None              # defaults to NOTIFY_EMAIL
+SMTP_PASSWORD_ENV = "JOB_TRACKER_SMTP_PASSWORD"
+
 # --- Dashboard ---------------------------------------------------------------
 DASHBOARD_HOST = "127.0.0.1"
 DASHBOARD_PORT = 5050
