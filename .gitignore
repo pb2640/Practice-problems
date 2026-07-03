@@ -2,3 +2,6 @@
 unique_problems/very_unique/q2.py
 unique_problems/pattern.py
 test_temp.py
+linkedin_job_tracker/data/
+linkedin_job_tracker/.venv/
+__pycache__/
