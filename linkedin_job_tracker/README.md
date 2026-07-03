@@ -60,6 +60,12 @@ SEARCHES = [
 right for a daily cadence. Every run dedupes against the DB, so overlap
 between runs is harmless.
 
+Location targeting: each search pins LinkedIn's `geoId` for the US (free-text
+locations are fuzzy-matched and can leak other countries), remote searches use
+LinkedIn's remote filter (`f_WT=2`) rather than "Remote" as a location, and
+`US_ONLY = True` drops any returned posting whose location string doesn't look
+like the US. Searching another country? Set its `geo_id` and `US_ONLY = False`.
+
 ## Dashboard
 
 - Stat tiles: jobs in view, new in 24h / this week, distinct companies

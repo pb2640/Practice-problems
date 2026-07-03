@@ -34,14 +34,40 @@ HEADERS = {
 JOB_ID_RE = re.compile(r"(\d+)")
 
 
-def fetch_page(session: requests.Session, keywords: str, location: str,
+US_STATES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID",
+    "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS",
+    "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
+    "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV",
+    "WI", "WY", "DC", "PR",
+}
+
+
+def location_is_us(loc: str | None) -> bool:
+    """True if a scraped location string looks like the United States."""
+    if not loc:
+        return False
+    low = loc.lower()
+    if any(extra.lower() in low for extra in config.US_LOCATION_EXTRAS):
+        return True
+    # "City, ST" / "City, ST (Remote)" — check the piece after the last comma
+    tail = loc.rsplit(",", 1)[-1].strip()
+    tail = re.sub(r"\(.*\)", "", tail).strip()
+    return tail.upper() in US_STATES
+
+
+def fetch_page(session: requests.Session, search: dict,
                start: int, time_range: str) -> str | None:
     params = {
-        "keywords": keywords,
-        "location": location,
+        "keywords": search["keywords"],
+        "location": search["location"],
         "f_TPR": time_range,
         "start": start,
     }
+    if search.get("geo_id"):
+        params["geoId"] = search["geo_id"]
+    if search.get("remote_only"):
+        params["f_WT"] = "2"
     for attempt in range(3):
         resp = session.get(GUEST_SEARCH_URL, params=params, headers=HEADERS, timeout=30)
         if resp.status_code == 200:
@@ -84,26 +110,32 @@ def parse_cards(html: str) -> list[dict]:
     return jobs
 
 
-def scrape_search(session: requests.Session, conn, keywords: str, location: str,
+def scrape_search(session: requests.Session, conn, search: dict,
                   time_range: str) -> tuple[int, int]:
-    found = new = 0
-    print(f"Searching: '{keywords}' in '{location}' ({time_range})")
+    found = new = skipped = 0
+    tag = " (remote only)" if search.get("remote_only") else ""
+    print(f"Searching: '{search['keywords']}' in '{search['location']}'{tag} ({time_range})")
     for page in range(config.MAX_PAGES_PER_SEARCH):
         start = page * 10
-        html = fetch_page(session, keywords, location, start, time_range)
+        html = fetch_page(session, search, start, time_range)
         if html is None:
             break
         cards = parse_cards(html)
         if not cards:
             break
         for job in cards:
-            job["search_keywords"] = keywords
-            job["search_location"] = location
+            if config.US_ONLY and not location_is_us(job.get("location")):
+                skipped += 1
+                continue
+            job["search_keywords"] = search["keywords"]
+            job["search_location"] = search["location"]
             found += 1
             if db.upsert_job(conn, job):
                 new += 1
         print(f"  page {page + 1}: {len(cards)} jobs")
         time.sleep(random.uniform(*config.REQUEST_DELAY_SECONDS))
+    if skipped:
+        print(f"  filtered out {skipped} non-US postings")
     return found, new
 
 
@@ -117,9 +149,7 @@ def run(time_range: str | None = None) -> int:
         try:
             with requests.Session() as session:
                 for search in config.SEARCHES:
-                    found, new = scrape_search(
-                        session, conn, search["keywords"], search["location"], time_range
-                    )
+                    found, new = scrape_search(session, conn, search, time_range)
                     total_found += found
                     total_new += new
                     conn.commit()
