@@ -45,6 +45,10 @@ ENRICHMENT_COLUMNS = [
     ("salary_max", "INTEGER"),
     ("seniority", "TEXT"),
     ("match_score", "INTEGER"),
+    # application tracking
+    ("status", "TEXT"),          # applied / referred / interviewing / offer / rejected
+    ("status_updated", "TEXT"),
+    ("notes", "TEXT"),
 ]
 
 

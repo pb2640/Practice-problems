@@ -99,11 +99,13 @@ stays polite.
 ## Dashboard
 
 - Stat tiles: jobs in view, new in 24h / this week, distinct companies
+- Pipeline tiles: applied / referred / interviewing / offers / rejected counts
 - Charts: new jobs per day, top companies, most in-demand skills
-- Filters: text search (includes descriptions), time window, skill,
+- Filters: text search (includes descriptions), time window, skill, status,
   newest-first or best-match ordering
 - Table shows skills, salary, and match % per posting, each linking to the
-  LinkedIn listing
+  LinkedIn listing, plus a status dropdown to track your applications
+  (stored in the same SQLite DB; the pipeline tiles ignore view filters)
 
 ## Notes & limits
 

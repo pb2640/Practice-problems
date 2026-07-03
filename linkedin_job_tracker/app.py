@@ -4,12 +4,14 @@ Run:  python app.py   then open http://127.0.0.1:5050
 """
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request
 
 import config
 import db
 
 app = Flask(__name__)
+
+STATUSES = ["applied", "referred", "interviewing", "offer", "rejected"]
 
 
 def since(days: int) -> str:
@@ -31,6 +33,12 @@ def job_filters():
     if skill:
         clauses.append("skills LIKE ?")
         params.append(f"%,{skill},%")
+    status = request.args.get("status", "").strip()
+    if status == "tracked":
+        clauses.append("status IS NOT NULL AND status != ''")
+    elif status:
+        clauses.append("status = ?")
+        params.append(status)
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, params
 
@@ -53,7 +61,7 @@ def api_jobs():
     with db.connect() as conn:
         rows = conn.execute(
             f"""SELECT job_id, title, company, location, posted_date, url, first_seen,
-                       skills, salary_text, seniority, match_score
+                       skills, salary_text, seniority, match_score, status, notes
                 FROM jobs {where}
                 ORDER BY {order} LIMIT ?""",
             (*params, limit),
@@ -94,13 +102,40 @@ def api_stats():
             "SELECT started_at, finished_at, jobs_found, jobs_new, status "
             "FROM scrape_runs ORDER BY id DESC LIMIT 1"
         ).fetchone()
+        # Pipeline is deliberately unfiltered: your applications are your
+        # applications regardless of the current dashboard view.
+        pipeline = {s: 0 for s in STATUSES}
+        for row in conn.execute(
+            "SELECT status, COUNT(*) AS n FROM jobs "
+            "WHERE status IS NOT NULL AND status != '' GROUP BY status"
+        ):
+            if row["status"] in pipeline:
+                pipeline[row["status"]] = row["n"]
     return jsonify({
         "total": total,
         "companies": companies,
         "new_24h": new_24h,
         "new_7d": new_7d,
+        "pipeline": pipeline,
         "last_run": dict(last_run) if last_run else None,
     })
+
+
+@app.route("/api/jobs/<job_id>/status", methods=["POST"])
+def api_set_status(job_id):
+    body = request.get_json(silent=True) or {}
+    status = (body.get("status") or "").strip().lower()
+    if status and status not in STATUSES:
+        abort(400, f"status must be empty or one of {STATUSES}")
+    with db.connect() as conn:
+        cur = conn.execute(
+            "UPDATE jobs SET status = ?, status_updated = ?, "
+            "notes = COALESCE(?, notes) WHERE job_id = ?",
+            (status, db.utcnow(), body.get("notes"), job_id),
+        )
+        if cur.rowcount == 0:
+            abort(404)
+    return jsonify({"ok": True, "job_id": job_id, "status": status})
 
 
 @app.route("/api/timeseries")
